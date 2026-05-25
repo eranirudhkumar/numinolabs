@@ -4,9 +4,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.config import settings
-from app.database import engine
+from app.database import AsyncSessionLocal, engine
 from app.models import book, loan, member  # noqa: F401
 from app.routers import books, loans, members
 
@@ -49,4 +51,16 @@ app.include_router(loans.router, prefix=API_PREFIX)
 
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict:
-    return {"status": "ok", "service": "neighborhood-library"}
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        return {"status": "ok", "service": "neighborhood-library", "database": "ok"}
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "service": "neighborhood-library",
+                "database": "unreachable",
+            },
+        )

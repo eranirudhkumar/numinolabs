@@ -44,6 +44,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Passed at image-build time so Next.js can embed it in the JS bundle.
+        # Change this to your server's public hostname when deploying remotely.
+        - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
     container_name: library_frontend
     restart: unless-stopped
     environment:

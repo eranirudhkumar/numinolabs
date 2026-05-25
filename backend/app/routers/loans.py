@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import loan as crud
 from app.database import get_db
-from app.schemas.loan import BorrowRequest, LoanListResponse, LoanResponse
+from app.schemas.loan import BorrowRequest, LoanListResponse, LoanResponse, PaginatedLoansResponse
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
 
@@ -26,7 +26,7 @@ async def borrow_book(
     return LoanResponse.model_validate(loan)
 
 
-@router.put(
+@router.post(
     "/{loan_id}/return",
     response_model=LoanResponse,
     summary="Return a borrowed book",
@@ -61,7 +61,10 @@ async def list_overdue_loans(
 )
 async def list_loans_by_member(
     member_id: uuid.UUID,
-    active_only: bool = Query(False, description="If true, return only active loans"),
+    active_only: bool = Query(
+        False,
+        description="If true, return only active and overdue loans (excludes returned)",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> LoanListResponse:
     loans = await crud.list_loans_by_member(db, member_id, active_only)
@@ -73,16 +76,18 @@ async def list_loans_by_member(
 
 @router.get(
     "/",
-    response_model=LoanListResponse,
+    response_model=PaginatedLoansResponse,
     summary="List all loans (paginated)",
 )
 async def list_all_loans(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-) -> LoanListResponse:
+) -> PaginatedLoansResponse:
     loans, total = await crud.list_all_loans(db, page, page_size)
-    return LoanListResponse(
+    return PaginatedLoansResponse(
         loans=[LoanResponse.model_validate(loan) for loan in loans],
         total=total,
+        page=page,
+        page_size=page_size,
     )

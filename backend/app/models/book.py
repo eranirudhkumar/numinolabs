@@ -31,7 +31,7 @@ class Book(Base, TimestampMixin):
     available_copies: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     loans: Mapped[list[Loan]] = relationship(
-        "Loan", back_populates="book", lazy="select"
+        "Loan", back_populates="book", lazy="raise_on_sql"
     )
 
     __table_args__ = (
@@ -40,7 +40,6 @@ class Book(Base, TimestampMixin):
         CheckConstraint(
             "available_copies <= total_copies", name="chk_copies_max"
         ),
-        Index("idx_books_isbn", "isbn"),
         Index("idx_books_author", "author"),
         Index("idx_books_title", "title"),
     )

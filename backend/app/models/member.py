@@ -45,11 +45,10 @@ class Member(Base, TimestampMixin):
     )
 
     loans: Mapped[list[Loan]] = relationship(
-        "Loan", back_populates="member", lazy="select"
+        "Loan", back_populates="member", lazy="raise_on_sql"
     )
 
     __table_args__ = (
-        Index("idx_members_email", "email"),
         Index("idx_members_last_name", "last_name"),
     )
 

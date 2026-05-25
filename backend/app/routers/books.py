@@ -40,11 +40,12 @@ async def create_book(
 async def list_books(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    title: Optional[str] = Query(None, description="Filter by title (partial match)"),
     author: Optional[str] = Query(None, description="Filter by author name (partial match)"),
     genre: Optional[str] = Query(None, description="Filter by genre (partial match)"),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedBooksResponse:
-    books, total = await crud.list_books(db, page, page_size, author, genre)
+    books, total = await crud.list_books(db, page, page_size, title, author, genre)
     return PaginatedBooksResponse(
         books=[BookResponse.model_validate(b) for b in books],
         total=total,
@@ -66,7 +67,7 @@ async def get_book(
     return BookResponse.model_validate(book)
 
 
-@router.put(
+@router.patch(
     "/{book_id}",
     response_model=BookResponse,
     summary="Partially update a book record",

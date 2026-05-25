@@ -120,9 +120,9 @@ Full interactive docs at **http://localhost:8000/docs**
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/books` | Create a new book |
-| `GET` | `/books` | List books (paginated, filterable by author/genre) |
+| `GET` | `/books` | List books (paginated, filterable by title, author, and genre) |
 | `GET` | `/books/{id}` | Get a single book |
-| `PUT` | `/books/{id}` | Partial update a book |
+| `PATCH` | `/books/{id}` | Partial update a book |
 
 ### Members — `/api/v1/members`
 
@@ -131,14 +131,14 @@ Full interactive docs at **http://localhost:8000/docs**
 | `POST` | `/members` | Register a new member |
 | `GET` | `/members` | List all members (paginated) |
 | `GET` | `/members/{id}` | Get a single member |
-| `PUT` | `/members/{id}` | Partial update a member |
+| `PATCH` | `/members/{id}` | Partial update a member |
 
 ### Loans — `/api/v1/loans`
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/loans/borrow` | Borrow a book |
-| `PUT` | `/loans/{id}/return` | Return a borrowed book |
+| `POST` | `/loans/{id}/return` | Return a borrowed book |
 | `GET` | `/loans` | List all loans (paginated) |
 | `GET` | `/loans/member/{id}` | All loans for a member |
 | `GET` | `/loans/overdue` | All currently overdue loans |

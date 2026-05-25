@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.member import Member
@@ -26,8 +28,14 @@ async def create_member(db: AsyncSession, data: MemberCreate) -> Member:
         address=data.address,
     )
     db.add(member)
-    await db.flush()
-    await db.refresh(member)
+    try:
+        await db.flush()
+        await db.refresh(member)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A member with email '{data.email}' already exists.",
+        )
     return member
 
 
@@ -42,12 +50,27 @@ async def get_member(db: AsyncSession, member_id: uuid.UUID) -> Member:
 
 
 async def list_members(
-    db: AsyncSession, page: int = 1, page_size: int = 20
+    db: AsyncSession, page: int = 1, page_size: int = 20, search: Optional[str] = None
 ) -> tuple[list[Member], int]:
-    query = select(Member).order_by(Member.last_name, Member.first_name)
+    query = select(Member)
+
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Member.first_name.ilike(pattern),
+                Member.last_name.ilike(pattern),
+                Member.email.ilike(pattern),
+            )
+        )
+
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
     members = (
-        await db.scalars(query.offset((page - 1) * page_size).limit(page_size))
+        await db.scalars(
+            query.order_by(Member.last_name, Member.first_name, Member.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
     ).all()
     return list(members), total or 0
 
@@ -71,6 +94,12 @@ async def update_member(
     for field, value in update_data.items():
         setattr(member, field, value)
 
-    await db.flush()
-    await db.refresh(member)
+    try:
+        await db.flush()
+        await db.refresh(member)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The provided email address is already in use by another member.",
+        )
     return member

@@ -66,7 +66,7 @@ def main() -> None:
         print(f"   Active loans: {active.json()['total']}")
 
         print("\n5. Return the book")
-        returned = client.put(f"/loans/{loan_data['id']}/return")
+        returned = client.post(f"/loans/{loan_data['id']}/return")
         returned.raise_for_status()
         returned_data = returned.json()
         print(f"   Status: {returned_data['status']}")

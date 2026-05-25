@@ -88,6 +88,8 @@ async def return_book(db: AsyncSession, loan_id: uuid.UUID) -> Loan:
             detail=f"Loan '{loan_id}' has already been returned.",
         )
 
+    await db.scalar(select(Book).where(Book.id == loan.book_id).with_for_update())
+
     now = datetime.now(tz=timezone.utc)
     loan.returned_at = now
     loan.status = LoanStatus.returned
@@ -99,8 +101,8 @@ async def return_book(db: AsyncSession, loan_id: uuid.UUID) -> Loan:
     loan.book.available_copies += 1
 
     await db.flush()
-    await db.refresh(loan)
-    await db.refresh(loan.book)
+    await db.refresh(loan, attribute_names=["returned_at", "fine_amount", "status", "updated_at"])
+    await db.refresh(loan.book, attribute_names=["available_copies", "updated_at"])
     return loan
 
 
@@ -115,7 +117,7 @@ async def list_loans_by_member(
         select(Loan)
         .where(Loan.member_id == member_id)
         .options(joinedload(Loan.book), joinedload(Loan.member))
-        .order_by(Loan.borrowed_at.desc())
+        .order_by(Loan.borrowed_at.desc(), Loan.id)
     )
     if active_only:
         query = query.where(Loan.status.in_([LoanStatus.active, LoanStatus.overdue]))
@@ -134,15 +136,19 @@ async def list_overdue_loans(db: AsyncSession) -> list[Loan]:
                 Loan.status.in_([LoanStatus.active, LoanStatus.overdue]),
             )
             .options(joinedload(Loan.book), joinedload(Loan.member))
-            .order_by(Loan.due_date)
+            .order_by(Loan.due_date, Loan.id)
         )
     ).unique().all()
 
-    for loan in loans:
-        if loan.status == LoanStatus.active:
-            loan.status = LoanStatus.overdue
+    to_transition = [loan for loan in loans if loan.status == LoanStatus.active]
+    for loan in to_transition:
+        loan.status = LoanStatus.overdue
 
-    await db.flush()
+    if to_transition:
+        await db.flush()
+        for loan in to_transition:
+            await db.refresh(loan, attribute_names=["status", "updated_at"])
+
     return list(loans)
 
 
@@ -152,9 +158,9 @@ async def list_all_loans(
     query = (
         select(Loan)
         .options(joinedload(Loan.book), joinedload(Loan.member))
-        .order_by(Loan.borrowed_at.desc())
+        .order_by(Loan.borrowed_at.desc(), Loan.id)
     )
-    total = await db.scalar(select(func.count()).select_from(select(Loan).subquery()))
+    total = await db.scalar(select(func.count(Loan.id)).select_from(Loan))
     loans = (
         await db.scalars(query.offset((page - 1) * page_size).limit(page_size))
     ).unique().all()

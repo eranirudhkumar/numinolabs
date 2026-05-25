@@ -36,3 +36,10 @@ class LoanResponse(BaseModel):
 class LoanListResponse(BaseModel):
     loans: list[LoanResponse]
     total: int
+
+
+class PaginatedLoansResponse(BaseModel):
+    loans: list[LoanResponse]
+    total: int
+    page: int
+    page_size: int

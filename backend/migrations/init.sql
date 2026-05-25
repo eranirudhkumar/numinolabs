@@ -36,7 +36,6 @@ CREATE TABLE books (
     CONSTRAINT chk_copies CHECK (available_copies <= total_copies)
 );
 
-CREATE INDEX idx_books_isbn   ON books (isbn);
 CREATE INDEX idx_books_author ON books (author);
 CREATE INDEX idx_books_title  ON books (title);
 
@@ -58,7 +57,6 @@ CREATE TABLE members (
     updated_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_members_email      ON members (email);
 CREATE INDEX idx_members_last_name  ON members (last_name);
 
 -- =============================================================

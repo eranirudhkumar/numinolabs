@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
@@ -30,8 +31,14 @@ async def create_book(db: AsyncSession, data: BookCreate) -> Book:
         available_copies=data.total_copies,
     )
     db.add(book)
-    await db.flush()
-    await db.refresh(book)
+    try:
+        await db.flush()
+        await db.refresh(book)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A book with ISBN '{data.isbn}' already exists.",
+        )
     return book
 
 
@@ -49,11 +56,14 @@ async def list_books(
     db: AsyncSession,
     page: int = 1,
     page_size: int = 20,
+    title: Optional[str] = None,
     author: Optional[str] = None,
     genre: Optional[str] = None,
 ) -> tuple[list[Book], int]:
     query = select(Book)
 
+    if title:
+        query = query.where(Book.title.ilike(f"%{title}%"))
     if author:
         query = query.where(Book.author.ilike(f"%{author}%"))
     if genre:
@@ -62,7 +72,7 @@ async def list_books(
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
     books = (
         await db.scalars(
-            query.offset((page - 1) * page_size).limit(page_size).order_by(Book.title)
+            query.order_by(Book.title, Book.id).offset((page - 1) * page_size).limit(page_size)
         )
     ).all()
     return list(books), total or 0
@@ -73,6 +83,20 @@ async def update_book(
 ) -> Book:
     book = await get_book(db, book_id)
     update_data = data.model_dump(exclude_unset=True)
+
+    # Reject an ISBN update that collides with a *different* book
+    if "isbn" in update_data and update_data["isbn"] is not None:
+        conflict = await db.scalar(
+            select(Book).where(
+                Book.isbn == update_data["isbn"],
+                Book.id != book_id,
+            )
+        )
+        if conflict:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"ISBN '{update_data['isbn']}' is already assigned to another book.",
+            )
 
     if "total_copies" in update_data:
         new_total = update_data.pop("total_copies")
@@ -94,6 +118,12 @@ async def update_book(
     for field, value in update_data.items():
         setattr(book, field, value)
 
-    await db.flush()
-    await db.refresh(book)
+    try:
+        await db.flush()
+        await db.refresh(book)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The provided ISBN is already assigned to another book.",
+        )
     return book

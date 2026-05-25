@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.models.member import MembershipStatus
 
@@ -16,10 +16,19 @@ class MemberBase(BaseModel):
     phone: Optional[str] = Field(None, max_length=20, examples=["+1-555-0100"])
     address: Optional[str] = Field(None, examples=["123 Main St, Springfield"])
 
-    @field_validator("first_name", "last_name")
+    @field_validator("first_name", "last_name", mode="before")
     @classmethod
-    def strip_names(cls, v: str) -> str:
-        return v.strip()
+    def strip_names(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("phone", "address", mode="before")
+    @classmethod
+    def strip_optional_contact(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            # Treat an empty / whitespace-only string as "not provided"
+            return stripped if stripped else None
+        return v
 
 
 class MemberCreate(MemberBase):
@@ -34,10 +43,35 @@ class MemberUpdate(BaseModel):
     address: Optional[str] = None
     membership_status: Optional[MembershipStatus] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def required_fields_cannot_be_null(cls, data: object) -> object:
+        """Reject explicit null for columns that are NOT NULL in the database.
+
+        A PATCH request should omit a field to leave it unchanged; sending
+        null for a required field is a client error, not a "clear" operation.
+        """
+        if isinstance(data, dict):
+            for field in ("first_name", "last_name", "email", "membership_status"):
+                if field in data and data[field] is None:
+                    raise ValueError(
+                        f"'{field}' is required and cannot be set to null. "
+                        "Omit the field to leave it unchanged."
+                    )
+        return data
+
     @field_validator("first_name", "last_name", mode="before")
     @classmethod
     def strip_names(cls, v: Optional[str]) -> Optional[str]:
         return v.strip() if v else v
+
+    @field_validator("phone", "address", mode="before")
+    @classmethod
+    def strip_optional_contact(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped if stripped else None
+        return v
 
 
 class MemberResponse(MemberBase):

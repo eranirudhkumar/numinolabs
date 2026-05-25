@@ -58,6 +58,7 @@ message CreateBookRequest {
 
 message UpdateBookRequest {
   string id             = 1;  // required — the book to update
+  // All other fields are optional; only supplied fields are changed (PATCH semantics)
   string isbn           = 2;
   string title          = 3;
   string author         = 4;
@@ -73,8 +74,9 @@ message GetBookRequest {
 message ListBooksRequest {
   int32  page      = 1;  // 1-based
   int32  page_size = 2;
-  string author    = 3;  // optional filter
-  string genre     = 4;  // optional filter
+  string title     = 3;  // optional partial-match filter
+  string author    = 4;  // optional filter
+  string genre     = 5;  // optional filter
 }
 
 message ListBooksResponse {
@@ -111,6 +113,7 @@ message CreateMemberRequest {
 
 message UpdateMemberRequest {
   string           id                = 1;  // required
+  // All other fields are optional; only supplied fields are changed (PATCH semantics)
   string           first_name        = 2;
   string           last_name         = 3;
   string           email             = 4;
@@ -126,6 +129,7 @@ message GetMemberRequest {
 message ListMembersRequest {
   int32  page      = 1;
   int32  page_size = 2;
+  string search    = 3;  // optional partial match on first_name, last_name, or email
 }
 
 message ListMembersResponse {
@@ -165,7 +169,7 @@ message ReturnBookRequest {
 
 message ListLoansByMemberRequest {
   string member_id = 1;
-  bool   active_only = 2;  // if true, only return active loans
+  bool   active_only = 2;  // if true, return only active and overdue loans (excludes returned)
 }
 
 message ListLoansByMemberResponse {

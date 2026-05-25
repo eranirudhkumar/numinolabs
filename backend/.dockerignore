@@ -1,0 +1,35 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment files — never bake secrets into the image
+.env
+.env.*
+!.env.example
+
+# Test & analysis artefacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Alembic migration versions (only needed if using alembic, not init.sql)
+# migrations/versions/

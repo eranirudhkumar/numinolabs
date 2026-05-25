@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,9 +40,10 @@ async def create_member(
 async def list_members(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Search by first name, last name, or email (partial match)"),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedMembersResponse:
-    members, total = await crud.list_members(db, page, page_size)
+    members, total = await crud.list_members(db, page, page_size, search)
     return PaginatedMembersResponse(
         members=[MemberResponse.model_validate(m) for m in members],
         total=total,
@@ -63,7 +65,7 @@ async def get_member(
     return MemberResponse.model_validate(member)
 
 
-@router.put(
+@router.patch(
     "/{member_id}",
     response_model=MemberResponse,
     summary="Partially update a member record",

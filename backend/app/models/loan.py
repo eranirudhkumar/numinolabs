@@ -61,10 +61,10 @@ class Loan(Base, TimestampMixin):
     )
 
     book: Mapped[Book] = relationship(
-        "Book", back_populates="loans", lazy="joined"
+        "Book", back_populates="loans", lazy="raise_on_sql"
     )
     member: Mapped[Member] = relationship(
-        "Member", back_populates="loans", lazy="joined"
+        "Member", back_populates="loans", lazy="raise_on_sql"
     )
 
     __table_args__ = (

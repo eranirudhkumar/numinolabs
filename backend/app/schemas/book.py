@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class BookBase(BaseModel):
@@ -15,10 +15,19 @@ class BookBase(BaseModel):
     published_year: Optional[int] = Field(None, ge=1000, le=2100, examples=[1960])
     total_copies: int = Field(1, ge=1, examples=[3])
 
-    @field_validator("title", "author")
+    @field_validator("title", "author", mode="before")
     @classmethod
-    def strip_whitespace(cls, v: str) -> str:
-        return v.strip()
+    def strip_required_str(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("isbn", "genre", mode="before")
+    @classmethod
+    def strip_optional_str(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            # Treat an empty / whitespace-only string as "not provided"
+            return stripped if stripped else None
+        return v
 
 
 class BookCreate(BookBase):
@@ -33,10 +42,35 @@ class BookUpdate(BaseModel):
     published_year: Optional[int] = Field(None, ge=1000, le=2100)
     total_copies: Optional[int] = Field(None, ge=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def required_fields_cannot_be_null(cls, data: object) -> object:
+        """Reject explicit null for columns that are NOT NULL in the database.
+
+        A PATCH request should omit a field to leave it unchanged; sending
+        null for a required field is a client error, not a "clear" operation.
+        """
+        if isinstance(data, dict):
+            for field in ("title", "author", "total_copies"):
+                if field in data and data[field] is None:
+                    raise ValueError(
+                        f"'{field}' is required and cannot be set to null. "
+                        "Omit the field to leave it unchanged."
+                    )
+        return data
+
     @field_validator("title", "author", mode="before")
     @classmethod
-    def strip_if_present(cls, v: Optional[str]) -> Optional[str]:
-        return v.strip() if v else v
+    def strip_str(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("isbn", "genre", mode="before")
+    @classmethod
+    def strip_optional_str(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped if stripped else None
+        return v
 
 
 class BookResponse(BookBase):
