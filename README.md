@@ -1,36 +1,240 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Neighborhood Library Service
 
-## Getting Started
+A full-stack library management application built with **Python / FastAPI**, **PostgreSQL**, and **Next.js**.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Architecture
+
+```
+┌──────────────┐       REST/HTTP      ┌────────────────────┐      SQL      ┌──────────────┐
+│  Next.js UI  │ ──────────────────▶  │  FastAPI Backend    │ ───────────▶  │  PostgreSQL  │
+│  (port 3000) │                      │  (port 8000)        │               │  (port 5432) │
+└──────────────┘                      └────────────────────┘               └──────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Service contract is defined in [`backend/proto/library.proto`](backend/proto/library.proto).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Quick Start (Docker — Recommended)
 
-## Learn More
+### Prerequisites
+- Docker ≥ 24 and Docker Compose v2
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# Clone / enter the project
+cd numinolabs
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Start everything (DB + backend + frontend)
+docker compose up --build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Service  | URL |
+|----------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| Swagger docs | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
 
-## Deploy on Vercel
+The PostgreSQL schema is applied automatically from `backend/migrations/init.sql` on first boot.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Local Development (Without Docker)
+
+### 1. PostgreSQL Setup
+
+```bash
+# Create the database and user
+psql -U postgres <<SQL
+CREATE USER library_user WITH PASSWORD 'library_pass';
+CREATE DATABASE library_db OWNER library_user;
+\c library_db
+\i backend/migrations/init.sql
+SQL
+```
+
+### 2. Backend Setup
+
+```bash
+cd backend
+
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate       # Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env if your DB credentials differ
+
+# Start the server (hot-reload in dev)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 3. Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Configure API URL
+cp .env.local.example .env.local   # or just use the existing .env.local
+
+# Start the dev server
+npm run dev
+```
+
+---
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql+asyncpg://library_user:library_pass@localhost:5432/library_db` | PostgreSQL connection string |
+| `FINE_PER_DAY` | `0.50` | Fine amount (USD) per overdue day |
+| `LOAN_PERIOD_DAYS` | `14` | Standard loan duration in days |
+| `APP_ENV` | `development` | `development` or `production` |
+
+### Frontend (`frontend/.env.local`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api/v1` | Backend API base URL |
+
+---
+
+## API Reference
+
+Full interactive docs at **http://localhost:8000/docs**
+
+### Books — `/api/v1/books`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/books` | Create a new book |
+| `GET` | `/books` | List books (paginated, filterable by author/genre) |
+| `GET` | `/books/{id}` | Get a single book |
+| `PUT` | `/books/{id}` | Partial update a book |
+
+### Members — `/api/v1/members`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/members` | Register a new member |
+| `GET` | `/members` | List all members (paginated) |
+| `GET` | `/members/{id}` | Get a single member |
+| `PUT` | `/members/{id}` | Partial update a member |
+
+### Loans — `/api/v1/loans`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/loans/borrow` | Borrow a book |
+| `PUT` | `/loans/{id}/return` | Return a borrowed book |
+| `GET` | `/loans` | List all loans (paginated) |
+| `GET` | `/loans/member/{id}` | All loans for a member |
+| `GET` | `/loans/overdue` | All currently overdue loans |
+
+---
+
+## Protocol Buffer Contract
+
+The service interface is formally defined in [`backend/proto/library.proto`](backend/proto/library.proto).
+
+To compile the proto (if you want to use the gRPC client SDK):
+
+```bash
+pip install grpcio-tools
+
+python -m grpc_tools.protoc \
+  -I backend/proto \
+  --python_out=backend/app \
+  --grpc_python_out=backend/app \
+  backend/proto/library.proto
+```
+
+---
+
+## Database Schema
+
+```
+books
+  id UUID PK, isbn VARCHAR unique, title VARCHAR, author VARCHAR,
+  genre VARCHAR, published_year SMALLINT,
+  total_copies INT, available_copies INT,
+  created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+
+members
+  id UUID PK, first_name VARCHAR, last_name VARCHAR, email VARCHAR unique,
+  phone VARCHAR, address TEXT,
+  membership_status ENUM(active|suspended|expired), membership_date DATE,
+  created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+
+loans
+  id UUID PK,
+  book_id UUID FK→books.id, member_id UUID FK→members.id,
+  borrowed_at TIMESTAMPTZ, due_date TIMESTAMPTZ, returned_at TIMESTAMPTZ,
+  status ENUM(active|returned|overdue), fine_amount NUMERIC(10,2),
+  created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+```
+
+---
+
+## Sample Client Script
+
+See [`backend/sample_client.py`](backend/sample_client.py) — demonstrates the full borrow/return cycle via `httpx`.
+
+```bash
+cd backend
+python sample_client.py
+```
+
+---
+
+## Key Business Rules
+
+1. **Availability** — a book cannot be borrowed if `available_copies == 0` (HTTP 409)
+2. **Membership** — only members with `active` status can borrow (HTTP 403)
+3. **Due date** — set to `borrowed_at + LOAN_PERIOD_DAYS` (default 14 days)
+4. **Fines** — calculated at return time: `days_late × FINE_PER_DAY` (default $0.50/day)
+5. **Duplicate ISBN** — rejected with HTTP 409
+6. **Duplicate email** — rejected with HTTP 409
+
+---
+
+## Project Structure
+
+```
+numinolabs/
+├── backend/
+│   ├── app/
+│   │   ├── main.py          # FastAPI app, CORS, router registration
+│   │   ├── config.py        # Pydantic settings (reads .env)
+│   │   ├── database.py      # Async SQLAlchemy engine + session
+│   │   ├── models/          # ORM models (Book, Member, Loan)
+│   │   ├── schemas/         # Pydantic request/response models
+│   │   ├── crud/            # DB operation functions
+│   │   └── routers/         # FastAPI route handlers
+│   ├── proto/
+│   │   └── library.proto    # gRPC / Protobuf service contract
+│   ├── migrations/
+│   │   └── init.sql         # PostgreSQL schema DDL
+│   ├── sample_client.py     # Demo script
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── app/                 # Next.js App Router pages
+│   ├── components/          # Shared UI components
+│   ├── lib/                 # API client + TypeScript types
+│   └── Dockerfile
+├── docker-compose.yml
+└── README.md
+```
